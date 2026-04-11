@@ -29,15 +29,15 @@ const COLOR_MAP = {
   'みずいろ': { bg: '#33BBEE', text: '#fff' },
 };
 
-// --- 形定義 ---
-const SHAPE_MAP = {
-  'まる':     '●',
-  'さんかく': '▲',
-  'しかく':   '■',
-  'ほし':     '★',
-  'ひしがた': '◆',
+// --- 形定義（形ごとに色を設定）---
+const SHAPE_DEF = {
+  'まる':     '#EE4444',
+  'さんかく': '#FF8C00',
+  'しかく':   '#2266EE',
+  'ほし':     '#CCBB00',
+  'ひしがた': '#AA33CC',
 };
-const SHAPE_BG = '#1a4a8a'; // 形・計算問題のバブル共通色
+const MATH_BG = '#1a4a8a'; // 計算問題のバブル色
 
 // --- 難易度設定 ---
 const DIFFICULTIES = {
@@ -199,12 +199,12 @@ function generateMathQuestion() {
     if (!seen.has(w)) { seen.add(w); wrongs.push(w); }
   }
 
-  // 正解・不正解すべて同じ色（SHAPE_BG）
+  // 正解・不正解すべて同じ色
   const answers = [
-    { label: String(answer), bgColor: SHAPE_BG, textColor: '#fff', correct: true },
+    { label: String(answer), bgColor: MATH_BG, textColor: '#fff', correct: true },
   ];
   wrongs.forEach(w => {
-    answers.push({ label: String(w), bgColor: SHAPE_BG, textColor: '#fff', correct: false });
+    answers.push({ label: String(w), bgColor: MATH_BG, textColor: '#fff', correct: false });
   });
   shuffle(answers);
   return { type: 'math', question: questionText, answers };
@@ -217,10 +217,10 @@ function generateShapeQuestion() {
   const wrongs = wrongPool.slice(0, diffConfig.bubbleCount - 1);
 
   const answers = [
-    { label: SHAPE_MAP[correct], bgColor: SHAPE_BG, textColor: '#fff', correct: true },
+    { label: '', bgColor: SHAPE_DEF[correct], textColor: '#fff', shapeType: correct, correct: true },
   ];
   wrongs.forEach(s => {
-    answers.push({ label: SHAPE_MAP[s], bgColor: SHAPE_BG, textColor: '#fff', correct: false });
+    answers.push({ label: '', bgColor: SHAPE_DEF[s], textColor: '#fff', shapeType: s, correct: false });
   });
   shuffle(answers);
   return { type: 'shape', question: `「${correct}」はどれ？`, answers };
@@ -624,24 +624,76 @@ function drawBubble(bubble) {
 
   ctx.shadowColor = bubble.bgColor;
   ctx.shadowBlur = 22;
-
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fillStyle = bubble.bgColor;
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 4;
 
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = bubble.textColor || '#fff';
-  const fs = Math.max(16, r * 0.62);
-  ctx.font = `bold ${fs}px "Arial Rounded MT Bold", Arial, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(bubble.label, 0, 0);
+  if (bubble.shapeType) {
+    // バルーン自体を形に描画
+    buildShapePath(ctx, bubble.shapeType, r * 0.88);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    // 通常の円バルーン
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = bubble.textColor || '#fff';
+    const fs = Math.max(16, r * 0.62);
+    ctx.font = `bold ${fs}px "Arial Rounded MT Bold", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(bubble.label, 0, 0);
+  }
 
   ctx.restore();
+}
+
+// 形のパスを生成（ctx.translate済みの座標系で描く）
+function buildShapePath(ctx, shapeName, r) {
+  ctx.beginPath();
+  switch (shapeName) {
+    case 'まる':
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      break;
+    case 'さんかく':
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.866, r * 0.5);
+      ctx.lineTo(-r * 0.866, r * 0.5);
+      ctx.closePath();
+      break;
+    case 'しかく': {
+      const s = r * 0.88;
+      ctx.rect(-s, -s, s * 2, s * 2);
+      break;
+    }
+    case 'ほし':
+      buildStarPath(ctx, 5, r, r * 0.42);
+      break;
+    case 'ひしがた':
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.65, 0);
+      ctx.lineTo(0, r);
+      ctx.lineTo(-r * 0.65, 0);
+      ctx.closePath();
+      break;
+  }
+}
+
+function buildStarPath(ctx, spikes, outer, inner) {
+  let angle = -Math.PI / 2;
+  const step = (Math.PI * 2) / spikes;
+  ctx.moveTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+  for (let i = 0; i < spikes; i++) {
+    angle += step / 2;
+    ctx.lineTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+    angle += step / 2;
+    ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+  }
+  ctx.closePath();
 }
 
 // --- パーティクル ---
