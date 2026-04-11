@@ -10,16 +10,11 @@ function loadScript(src) {
   });
 }
 
-// --- キーポイント定義 ---
-// 座位対応：上半身のみで衝突判定（鼻・肩・肘・手首）
-const COLLISION_KP = [0, 5, 6, 7, 8, 9, 10];
+// --- キーポイント定義（上半身のみ：座位対応）---
+const COLLISION_KP = [0, 5, 6, 7, 8, 9, 10]; // 鼻・肩・肘・手首
 
 const SKELETON_PAIRS = [
-  [5, 6],   // 左肩 - 右肩
-  [5, 7],   // 左肩 - 左肘
-  [7, 9],   // 左肘 - 左手首
-  [6, 8],   // 右肩 - 右肘
-  [8, 10],  // 右肘 - 右手首
+  [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
 ];
 
 // --- 色定義 ---
@@ -34,17 +29,28 @@ const COLOR_MAP = {
   'みずいろ': { bg: '#33BBEE', text: '#fff' },
 };
 
+// --- 形定義 ---
+const SHAPE_MAP = {
+  'まる':     '●',
+  'さんかく': '▲',
+  'しかく':   '■',
+  'ほし':     '★',
+  'ひしがた': '◆',
+};
+const SHAPE_BG = '#1a4a8a'; // 形・計算問題のバブル共通色
+
 // --- 難易度設定 ---
 const DIFFICULTIES = {
   easy: {
     label: 'かんたん',
     bubbleSpeed: 1.0,
     bubbleCount: 2,
-    questionTime: 12,       // 秒
-    levelUpInterval: 60,    // 秒
+    questionTime: 12,
+    levelUpInterval: 60,
     colors: ['あか', 'あお', 'きいろ', 'みどり'],
     mathRange: [1, 5],
     mathOps: ['+'],
+    shapes: ['まる', 'さんかく', 'しかく'],
   },
   normal: {
     label: 'ふつう',
@@ -55,6 +61,7 @@ const DIFFICULTIES = {
     colors: ['あか', 'あお', 'きいろ', 'みどり', 'むらさき', 'オレンジ'],
     mathRange: [1, 10],
     mathOps: ['+', '-'],
+    shapes: ['まる', 'さんかく', 'しかく', 'ほし'],
   },
   hard: {
     label: 'むずかしい',
@@ -65,6 +72,7 @@ const DIFFICULTIES = {
     colors: Object.keys(COLOR_MAP),
     mathRange: [1, 20],
     mathOps: ['+', '-', '×'],
+    shapes: Object.keys(SHAPE_MAP),
   },
 };
 
@@ -73,11 +81,12 @@ let detector = null, video = null, canvas, ctx;
 let gameState = 'start';
 let animFrame = null;
 let currentDifficulty = 'normal';
+let currentMode = 'mix'; // math | color | shape | mix
 let diffConfig = { ...DIFFICULTIES.normal };
 
 let score = 0, lives = 3, level = 1;
 let levelTimer = 0;
-let highScores = JSON.parse(localStorage.getItem('cogGameHS2') || '{"easy":0,"normal":0,"hard":0}');
+let highScores = JSON.parse(localStorage.getItem('cogGameHS3') || '{"easy":0,"normal":0,"hard":0}');
 
 let bubbles = [];
 let particles = [];
@@ -109,10 +118,10 @@ function playBeep(freq, dur, type = 'square') {
     osc.start(); osc.stop(ac.currentTime + dur);
   } catch (_) {}
 }
-function playCorrect()  { playBeep(880, 0.08); setTimeout(() => playBeep(1320, 0.12), 80); }
-function playWrong()    { playBeep(180, 0.3, 'sawtooth'); }
-function playTimeout()  { playBeep(300, 0.2, 'triangle'); }
-function playLevelUp()  {
+function playCorrect() { playBeep(880, 0.08); setTimeout(() => playBeep(1320, 0.12), 80); }
+function playWrong()   { playBeep(180, 0.3, 'sawtooth'); }
+function playTimeout() { playBeep(300, 0.2, 'triangle'); }
+function playLevelUp() {
   playBeep(523, 0.1);
   setTimeout(() => playBeep(659, 0.1), 100);
   setTimeout(() => playBeep(784, 0.15), 200);
@@ -132,33 +141,38 @@ function randInt(min, max) {
 
 // --- 問題生成 ---
 function generateQuestion() {
-  const useColor = Math.random() < 0.5;
-  return useColor ? generateColorQuestion() : generateMathQuestion();
+  if (currentMode === 'math')  return generateMathQuestion();
+  if (currentMode === 'color') return generateColorQuestion();
+  if (currentMode === 'shape') return generateShapeQuestion();
+  // mix：ランダムに選ぶ
+  const types = ['math', 'color', 'shape'];
+  const t = types[Math.floor(Math.random() * types.length)];
+  if (t === 'math')  return generateMathQuestion();
+  if (t === 'color') return generateColorQuestion();
+  return generateShapeQuestion();
 }
 
 function generateColorQuestion() {
   const colors = diffConfig.colors;
   const correct = colors[Math.floor(Math.random() * colors.length)];
   const wrongPool = shuffle(colors.filter(c => c !== correct));
-  const wrongColors = wrongPool.slice(0, diffConfig.bubbleCount - 1);
+  const wrongs = wrongPool.slice(0, diffConfig.bubbleCount - 1);
 
   const answers = [
-    { text: correct, bgColor: COLOR_MAP[correct].bg, textColor: COLOR_MAP[correct].text, correct: true },
+    { label: correct, bgColor: COLOR_MAP[correct].bg, textColor: COLOR_MAP[correct].text, correct: true },
   ];
-  wrongColors.forEach(c => {
-    answers.push({ text: c, bgColor: COLOR_MAP[c].bg, textColor: COLOR_MAP[c].text, correct: false });
+  wrongs.forEach(c => {
+    answers.push({ label: c, bgColor: COLOR_MAP[c].bg, textColor: COLOR_MAP[c].text, correct: false });
   });
   shuffle(answers);
-
   return { type: 'color', question: `「${correct}」はどれ？`, answers };
 }
 
 function generateMathQuestion() {
   const [min, max] = diffConfig.mathRange;
-  const ops = diffConfig.mathOps;
-  const op = ops[Math.floor(Math.random() * ops.length)];
-
+  const op = diffConfig.mathOps[Math.floor(Math.random() * diffConfig.mathOps.length)];
   let a, b, answer, questionText;
+
   if (op === '+') {
     a = randInt(min, max); b = randInt(min, max);
     answer = a + b;
@@ -173,29 +187,43 @@ function generateMathQuestion() {
     questionText = `${a} × ${b} ＝ ?`;
   }
 
-  // 不正解を生成（重複なし・0以上）
   const seen = new Set([answer]);
-  const wrongAnswers = [];
-  for (let tries = 0; tries < 200 && wrongAnswers.length < diffConfig.bubbleCount - 1; tries++) {
+  const wrongs = [];
+  for (let t = 0; t < 200 && wrongs.length < diffConfig.bubbleCount - 1; t++) {
     const delta = randInt(1, Math.max(4, Math.ceil(Math.abs(answer) * 0.5) + 2));
     const w = Math.random() < 0.5 ? answer + delta : Math.max(0, answer - delta);
-    if (!seen.has(w)) { seen.add(w); wrongAnswers.push(w); }
+    if (!seen.has(w)) { seen.add(w); wrongs.push(w); }
   }
-  // 万一足りない場合の補完
-  while (wrongAnswers.length < diffConfig.bubbleCount - 1) {
-    const w = answer + wrongAnswers.length + 1;
-    if (!seen.has(w)) { seen.add(w); wrongAnswers.push(w); }
+  while (wrongs.length < diffConfig.bubbleCount - 1) {
+    const w = answer + wrongs.length + 1;
+    if (!seen.has(w)) { seen.add(w); wrongs.push(w); }
   }
 
+  // 正解・不正解すべて同じ色（SHAPE_BG）
   const answers = [
-    { text: String(answer), bgColor: '#2255DD', textColor: '#fff', correct: true },
+    { label: String(answer), bgColor: SHAPE_BG, textColor: '#fff', correct: true },
   ];
-  wrongAnswers.forEach(w => {
-    answers.push({ text: String(w), bgColor: '#883399', textColor: '#fff', correct: false });
+  wrongs.forEach(w => {
+    answers.push({ label: String(w), bgColor: SHAPE_BG, textColor: '#fff', correct: false });
   });
   shuffle(answers);
-
   return { type: 'math', question: questionText, answers };
+}
+
+function generateShapeQuestion() {
+  const shapes = diffConfig.shapes;
+  const correct = shapes[Math.floor(Math.random() * shapes.length)];
+  const wrongPool = shuffle(shapes.filter(s => s !== correct));
+  const wrongs = wrongPool.slice(0, diffConfig.bubbleCount - 1);
+
+  const answers = [
+    { label: SHAPE_MAP[correct], bgColor: SHAPE_BG, textColor: '#fff', correct: true },
+  ];
+  wrongs.forEach(s => {
+    answers.push({ label: SHAPE_MAP[s], bgColor: SHAPE_BG, textColor: '#fff', correct: false });
+  });
+  shuffle(answers);
+  return { type: 'shape', question: `「${correct}」はどれ？`, answers };
 }
 
 // --- バブルスポーン ---
@@ -209,7 +237,6 @@ function spawnBubbles(question) {
   const padding = r + 10;
   const usableW = canvas.width - padding * 2;
 
-  // X座標を均等分散（少しランダムさを加える）
   const xPositions = [];
   for (let i = 0; i < count; i++) {
     const base = padding + (usableW / count) * (i + 0.5);
@@ -220,7 +247,7 @@ function spawnBubbles(question) {
   question.answers.forEach((ans, i) => {
     bubbles.push({
       x: xPositions[i],
-      y: -r - i * r * 0.6,   // 少しずつずらして出現
+      y: -r - i * r * 0.6,
       size: r,
       speed: diffConfig.bubbleSpeed + Math.random() * 0.5,
       ...ans,
@@ -248,12 +275,19 @@ async function init() {
   ctx = canvas.getContext('2d');
   setStatus('TensorFlow.js を読み込み中...');
 
-  // 難易度ボタン
   document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       currentDifficulty = btn.dataset.diff;
+    });
+  });
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      currentMode = btn.dataset.mode;
     });
   });
 
@@ -412,7 +446,7 @@ function gameOver() {
   const hs = highScores[currentDifficulty];
   if (score > hs) {
     highScores[currentDifficulty] = score;
-    localStorage.setItem('cogGameHS2', JSON.stringify(highScores));
+    localStorage.setItem('cogGameHS3', JSON.stringify(highScores));
   }
   const newHS = highScores[currentDifficulty];
   document.getElementById('finalScore').textContent = `スコア: ${score} てん`;
@@ -433,14 +467,12 @@ function updateHUD() {
 async function loop() {
   animFrame = requestAnimationFrame(loop);
 
-  // カメラ映像（左右反転）
   ctx.save();
   ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  // ポーズ推定
   if (detector && video.readyState >= 2) {
     try {
       const poses = await detector.estimatePoses(video);
@@ -486,7 +518,6 @@ function drawSkeleton(keypoints) {
 
 // --- ゲーム更新 ---
 function updateGame() {
-  // レベルアップ（時間経過）
   levelTimer++;
   const lvInterval = diffConfig.levelUpInterval * 60;
   if (levelTimer >= lvInterval) {
@@ -499,17 +530,14 @@ function updateGame() {
     spawnLevelUpEffect();
   }
 
-  // 無敵時間
   if (hitCooldown > 0) hitCooldown--;
 
-  // バブル更新・衝突判定
   let correctHit = false;
-  let wrongHit = false;
 
   bubbles = bubbles.filter(bubble => {
     if (bubble.hit) return false;
     bubble.y += bubble.speed;
-    if (bubble.y - bubble.size > canvas.height) return false; // 画面外 → 削除
+    if (bubble.y - bubble.size > canvas.height) return false;
 
     if (hitCooldown === 0 && checkBubbleCollision(bubble)) {
       bubble.hit = true;
@@ -520,7 +548,6 @@ function updateGame() {
         playCorrect();
         spawnSparkle(bubble.x, bubble.y);
       } else {
-        wrongHit = true;
         lives--;
         updateHUD();
         playWrong();
@@ -538,11 +565,9 @@ function updateGame() {
 
   if (gameState !== 'playing') return;
 
-  // タイマーバー・バブル描画
   drawTimerBar();
   for (const b of bubbles) drawBubble(b);
 
-  // 正解バブルに触れた → 次の問題へ
   if (correctHit && !questionTransitioning) {
     questionTransitioning = true;
     bubbles = [];
@@ -555,7 +580,6 @@ function updateGame() {
 
   if (questionTransitioning) return;
 
-  // 全バブルが画面外 → 時間切れ扱い
   if (bubbles.length === 0) {
     lives--;
     updateHUD();
@@ -565,7 +589,6 @@ function updateGame() {
     return;
   }
 
-  // タイムアウト
   questionTimer++;
   if (questionTimer >= questionTimeLimit) {
     bubbles = [];
@@ -576,7 +599,6 @@ function updateGame() {
     nextQuestion();
   }
 
-  // 無敵フラッシュ
   if (hitCooldown > 0 && hitCooldown % 10 < 5) {
     ctx.fillStyle = 'rgba(255,0,0,0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -587,12 +609,10 @@ function updateGame() {
 function drawTimerBar() {
   if (questionTimeLimit === 0) return;
   const progress = Math.max(0, 1 - questionTimer / questionTimeLimit);
-  const barH = 12;
-  const barY = canvas.height - barH;
+  const barH = 12, barY = canvas.height - barH;
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(0, barY, canvas.width, barH);
-  const hue = Math.floor(progress * 120); // 120(緑) → 0(赤)
-  ctx.fillStyle = `hsl(${hue},100%,50%)`;
+  ctx.fillStyle = `hsl(${Math.floor(progress * 120)},100%,50%)`;
   ctx.fillRect(0, barY, canvas.width * progress, barH);
 }
 
@@ -602,11 +622,9 @@ function drawBubble(bubble) {
   ctx.save();
   ctx.translate(bubble.x, bubble.y);
 
-  // 影
   ctx.shadowColor = bubble.bgColor;
   ctx.shadowBlur = 22;
 
-  // 円
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fillStyle = bubble.bgColor;
@@ -615,14 +633,13 @@ function drawBubble(bubble) {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // テキスト
   ctx.shadowBlur = 0;
   ctx.fillStyle = bubble.textColor || '#fff';
-  const fs = Math.max(16, r * 0.6);
-  ctx.font = `bold ${fs}px "Arial Rounded MT Bold", Arial`;
+  const fs = Math.max(16, r * 0.62);
+  ctx.font = `bold ${fs}px "Arial Rounded MT Bold", Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(bubble.text, 0, 0);
+  ctx.fillText(bubble.label, 0, 0);
 
   ctx.restore();
 }
@@ -634,38 +651,27 @@ function spawnExplosion(x, y, color) {
   for (let i = 0; i < 20; i++) {
     const angle = (Math.PI * 2 * i) / 20;
     const speed = 3 + Math.random() * 7;
-    particles.push({ x, y,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      life: 1, decay: 0.03 + Math.random() * 0.02,
-      size: 5 + Math.random() * 8, color });
+    particles.push({ x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+      life: 1, decay: 0.03+Math.random()*0.02, size: 5+Math.random()*8, color });
   }
 }
-
 function spawnSparkle(x, y) {
   for (let i = 0; i < 22; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 3 + Math.random() * 8;
-    const color = ['#FFD700','#FF6B6B','#FFF','#FF8C00','#A0FFFF'][Math.floor(Math.random() * 5)];
-    particles.push({ x, y,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2,
-      life: 1, decay: 0.022 + Math.random() * 0.02,
-      size: 5 + Math.random() * 9, color });
+    const angle = Math.random()*Math.PI*2, speed = 3+Math.random()*8;
+    const color = ['#FFD700','#FF6B6B','#FFF','#FF8C00','#A0FFFF'][Math.floor(Math.random()*5)];
+    particles.push({ x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-2,
+      life: 1, decay: 0.022+Math.random()*0.02, size: 5+Math.random()*9, color });
   }
 }
-
 function spawnLevelUpEffect() {
   for (let i = 0; i < 50; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 3 + Math.random() * 11;
-    const color = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-    particles.push({
-      x: canvas.width / 2, y: canvas.height / 2,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 5,
-      life: 1, decay: 0.013,
-      size: 8 + Math.random() * 12, color });
+    const angle = Math.random()*Math.PI*2, speed = 3+Math.random()*11;
+    const color = PARTICLE_COLORS[Math.floor(Math.random()*PARTICLE_COLORS.length)];
+    particles.push({ x: canvas.width/2, y: canvas.height/2,
+      vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-5,
+      life: 1, decay: 0.013, size: 8+Math.random()*12, color });
   }
 }
-
 function drawParticles() {
   particles = particles.filter(p => {
     p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life -= p.decay;
@@ -674,7 +680,7 @@ function drawParticles() {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
     ctx.shadowColor = p.color; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
     ctx.restore();
     return true;
   });

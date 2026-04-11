@@ -71,40 +71,46 @@
     line-height: 1.7;
   }
 
-  /* 難易度選択 */
-  .diff-label {
-    font-size: 20px;
-    color: #FFD700;
-    margin-bottom: 12px;
+  /* モード・難易度選択 共通 */
+  .select-label {
+    font-size: 18px;
+    color: #A0FFFF;
+    margin-bottom: 10px;
+    font-weight: bold;
   }
-  .diff-row {
+  .select-row {
     display: flex;
-    gap: 14px;
+    gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
   }
-  .diff-btn {
-    font-size: 20px;
+  .mode-btn, .diff-btn {
+    font-size: 18px;
     font-family: inherit;
     background: rgba(255,255,255,0.12);
     color: white;
-    border: 3px solid rgba(255,255,255,0.3);
+    border: 2px solid rgba(255,255,255,0.3);
     border-radius: 50px;
-    padding: 12px 28px;
+    padding: 10px 22px;
     cursor: pointer;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.15s, transform 0.1s;
   }
+  .mode-btn.selected {
+    background: linear-gradient(135deg, #0088AA, #00CCFF);
+    border-color: #00CCFF;
+    box-shadow: 0 4px 0 #005577;
+    font-weight: bold;
+  }
   .diff-btn.selected {
     background: linear-gradient(135deg, #FF6B00, #FFD700);
     border-color: #FFD700;
-    box-shadow: 0 5px 0 #B84700;
-    color: white;
+    box-shadow: 0 4px 0 #B84700;
     font-weight: bold;
   }
-  .diff-btn:active { transform: translateY(3px); }
+  .mode-btn:active, .diff-btn:active { transform: translateY(3px); }
 
   /* ボタン */
   button {
@@ -243,17 +249,23 @@
       <p class="subtitle">あたまとからだのトレーニング</p>
       <p class="hint">
         📷 カメラにうつって てをのばしてこたえよう！<br>
-        🪑 すわったままでもOK！<br>
-        🎨 いろのもんだい・🔢 けいさんもんだい<br>
-        ✅ ただしいこたえのバブルにさわってね<br>
-        ❤️ まちがえると ライフがへるよ
+        🪑 すわったままでもOK！&nbsp;
+        ✅ ただしいバブルにさわってね
       </p>
 
-      <p class="diff-label">むずかしさをえらんでね</p>
-      <div class="diff-row">
-        <button class="diff-btn" data-diff="easy">⭐ かんたん</button>
-        <button class="diff-btn selected" data-diff="normal">⭐⭐ ふつう</button>
-        <button class="diff-btn" data-diff="hard">⭐⭐⭐ むずかしい</button>
+      <p class="select-label">🎮 ゲームのしゅるい</p>
+      <div class="select-row">
+        <button class="mode-btn" data-mode="math">🔢 けいさん</button>
+        <button class="mode-btn" data-mode="color">🎨 いろ</button>
+        <button class="mode-btn" data-mode="shape">🔷 かたち</button>
+        <button class="mode-btn selected" data-mode="mix">🎲 ミックス</button>
+      </div>
+
+      <p class="select-label">⭐ むずかしさ</p>
+      <div class="select-row">
+        <button class="diff-btn" data-diff="easy">かんたん</button>
+        <button class="diff-btn selected" data-diff="normal">ふつう</button>
+        <button class="diff-btn" data-diff="hard">むずかしい</button>
       </div>
 
       <button id="startBtn" disabled>はじめる！</button>
