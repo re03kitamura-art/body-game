@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>からだでアソボ！</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    font-family: 'Arial Rounded MT Bold', 'Rounded Mplus 1c', Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #gameCanvas {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  #screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-align: center;
+    pointer-events: none;
+  }
+  .overlay {
+    background: rgba(0,0,0,0.7);
+    border-radius: 30px;
+    padding: 40px 60px;
+    pointer-events: all;
+  }
+  h1 {
+    font-size: 64px;
+    color: #FFD700;
+    text-shadow: 4px 4px 0 #FF6B00, -2px -2px 0 #FF6B00;
+    margin-bottom: 20px;
+    animation: bounce 1s infinite alternate;
+  }
+  @keyframes bounce {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-10px); }
+  }
+  .subtitle {
+    font-size: 28px;
+    color: #A0FFFF;
+    margin-bottom: 30px;
+  }
+  .hint {
+    font-size: 20px;
+    color: #ccc;
+    margin-bottom: 40px;
+    line-height: 1.6;
+  }
+  button {
+    font-size: 36px;
+    font-family: inherit;
+    background: linear-gradient(135deg, #FF6B00, #FFD700);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 20px 60px;
+    cursor: pointer;
+    box-shadow: 0 8px 0 #B84700;
+    transition: transform 0.1s, box-shadow 0.1s;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:active {
+    transform: translateY(4px);
+    box-shadow: 0 4px 0 #B84700;
+  }
+  #hud {
+    position: absolute;
+    top: 16px; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    pointer-events: none;
+  }
+  .hud-box {
+    background: rgba(0,0,0,0.6);
+    border-radius: 20px;
+    padding: 10px 24px;
+    font-size: 32px;
+    font-weight: bold;
+    color: white;
+  }
+  .hud-box span { color: #FFD700; }
+  #hudButtons {
+    display: flex;
+    gap: 12px;
+    pointer-events: all;
+  }
+  .icon-btn {
+    font-size: 28px;
+    padding: 10px 20px;
+    border-radius: 20px;
+    background: rgba(0,0,0,0.6);
+    box-shadow: 0 4px 0 rgba(0,0,0,0.4);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    text-shadow: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .icon-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.4); }
+  /* ポーズ画面 */
+  #pauseScreen { display: none; }
+  #pauseScreen h1 { animation: none; color: #A0FFFF; text-shadow: 3px 3px 0 #0088AA; }
+  .btn-row { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .btn-secondary {
+    font-size: 28px;
+    font-family: inherit;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 3px solid rgba(255,255,255,0.4);
+    border-radius: 50px;
+    padding: 14px 40px;
+    cursor: pointer;
+    box-shadow: none;
+    text-shadow: none;
+    transition: background 0.15s;
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.25); }
+  #countdown {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 160px;
+    font-weight: bold;
+    color: #FFD700;
+    text-shadow: 6px 6px 0 #FF6B00;
+    pointer-events: none;
+    display: none;
+  }
+  #status {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    color: rgba(255,255,255,0.6);
+    pointer-events: none;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="container">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- スタート画面 -->
+  <div id="screen">
+    <div id="startScreen" class="overlay">
+      <h1>からだでアソボ！</h1>
+      <p class="subtitle">からだをうごかして しょうがいぶつをよけよう！</p>
+      <p class="hint">
+        📷 カメラをつかうよ<br>
+        🍎 りんごにさわってゲット！<br>
+        💩 うんちにさわったらライフがへるよ<br>
+        ❤️ 3かいあたったらゲームオーバー
+      </p>
+      <button id="startBtn">はじめる！</button>
+    </div>
+
+    <!-- ゲームオーバー画面 -->
+    <div id="gameOverScreen" class="overlay hidden">
+      <h1>ゲームオーバー</h1>
+      <p class="subtitle" id="finalScore"></p>
+      <p class="hint" id="highScoreMsg"></p>
+      <button id="retryBtn">もういちど！</button>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-box">❤️ <span id="lives">3</span></div>
+    <div class="hud-box">⭐ <span id="score">0</span></div>
+    <div class="hud-box">LV <span id="level">1</span></div>
+    <div id="hudButtons">
+      <button class="icon-btn" id="pauseBtn" title="ポーズ">⏸</button>
+      <button class="icon-btn" id="stopBtn"  title="やめる">⏹</button>
+    </div>
+  </div>
+
+  <!-- ポーズ画面 -->
+  <div id="screen2" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+    <div id="pauseScreen" class="overlay">
+      <h1>⏸ ポーズ中</h1>
+      <p class="hint" style="margin-bottom:30px;">ちょっとやすもう！</p>
+      <div class="btn-row">
+        <button id="resumeBtn">▶ つづける</button>
+        <button class="btn-secondary" id="quitBtn">🏠 タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- カウントダウン -->
+  <div id="countdown"></div>
+
+  <div id="status">カメラを読み込み中...</div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
