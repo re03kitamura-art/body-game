@@ -269,27 +269,27 @@ function checkBubbleCollision(bubble) {
   return false;
 }
 
+// --- モード・難易度ボタン（ページ読み込み時に即登録）---
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    currentMode = btn.dataset.mode;
+  });
+});
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    currentDifficulty = btn.dataset.diff;
+  });
+});
+
 // --- 初期化 ---
 async function init() {
   canvas = document.getElementById('gameCanvas');
   ctx = canvas.getContext('2d');
   setStatus('TensorFlow.js を読み込み中...');
-
-  document.querySelectorAll('.diff-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      currentDifficulty = btn.dataset.diff;
-    });
-  });
-
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      currentMode = btn.dataset.mode;
-    });
-  });
 
   try {
     await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js');
