@@ -11,7 +11,7 @@ function loadScript(src) {
 }
 
 // --- キーポイント定義（上半身のみ：座位対応）---
-const COLLISION_KP = [0, 5, 6, 7, 8, 9, 10]; // 鼻・肩・肘・手首
+const COLLISION_KP = [5, 6, 7, 8, 9, 10]; // 肩・肘・手首
 
 const SKELETON_PAIRS = [
   [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
