@@ -527,8 +527,11 @@ function drawSkeleton(keypoints) {
     ctx.strokeStyle = 'rgba(0,255,200,0.75)';
     ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.stroke();
   }
-  for (const kp of keypoints) {
-    if (kp.score < MIN_CONF) continue;
+  // 顔（インデックス0〜4: 鼻・目・耳）は表示しない
+  const DRAW_KP = [5, 6, 7, 8, 9, 10];
+  for (const idx of DRAW_KP) {
+    const kp = keypoints[idx];
+    if (!kp || kp.score < MIN_CONF) continue;
     const p = scaleKP(kp);
     ctx.fillStyle = '#00FFCC';
     ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
