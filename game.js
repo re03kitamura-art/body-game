@@ -72,7 +72,7 @@ const DIFFICULTIES = {
     colors: Object.keys(COLOR_MAP),
     mathRange: [1, 20],
     mathOps: ['+', '-', '×'],
-    shapes: Object.keys(SHAPE_MAP),
+    shapes: Object.keys(SHAPE_DEF),
   },
 };
 
@@ -259,6 +259,8 @@ function spawnBubbles(question) {
 // --- 衝突判定 ---
 function checkBubbleCollision(bubble) {
   if (!lastKeypoints || lastKeypoints.length === 0) return false;
+
+  // 通常キーポイントの判定
   for (const idx of COLLISION_KP) {
     const kp = lastKeypoints[idx];
     if (!kp || kp.score < 0.3) continue;
@@ -266,6 +268,23 @@ function checkBubbleCollision(bubble) {
     const dx = p.x - bubble.x, dy = p.y - bubble.y;
     if (Math.sqrt(dx * dx + dy * dy) < bubble.size * 0.9) return true;
   }
+
+  // 手先の仮想ポイント判定（肘→手首の方向に1.4倍延長）
+  // 左腕: 肘=7, 手首=9 / 右腕: 肘=8, 手首=10
+  const armPairs = [[7, 9], [8, 10]];
+  for (const [elbowIdx, wristIdx] of armPairs) {
+    const elbow = lastKeypoints[elbowIdx];
+    const wrist = lastKeypoints[wristIdx];
+    if (!elbow || !wrist || elbow.score < 0.3 || wrist.score < 0.3) continue;
+    const pe = scaleKP(elbow);
+    const pw = scaleKP(wrist);
+    // 肘→手首ベクトルを1.4倍延長した先が「手先」
+    const handX = pw.x + (pw.x - pe.x) * 0.4;
+    const handY = pw.y + (pw.y - pe.y) * 0.4;
+    const dx = handX - bubble.x, dy = handY - bubble.y;
+    if (Math.sqrt(dx * dx + dy * dy) < bubble.size * 0.9) return true;
+  }
+
   return false;
 }
 
@@ -513,6 +532,24 @@ function drawSkeleton(keypoints) {
     const p = scaleKP(kp);
     ctx.fillStyle = '#00FFCC';
     ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 手先の仮想ポイントを描画（肘→手首を延長した先）
+  const armPairs = [[7, 9], [8, 10]];
+  for (const [elbowIdx, wristIdx] of armPairs) {
+    const elbow = keypoints[elbowIdx];
+    const wrist = keypoints[wristIdx];
+    if (!elbow || !wrist || elbow.score < MIN_CONF || wrist.score < MIN_CONF) continue;
+    const pe = scaleKP(elbow);
+    const pw = scaleKP(wrist);
+    const handX = pw.x + (pw.x - pe.x) * 0.4;
+    const handY = pw.y + (pw.y - pe.y) * 0.4;
+    // 手首→手先の線
+    ctx.strokeStyle = 'rgba(255,220,0,0.75)';
+    ctx.beginPath(); ctx.moveTo(pw.x, pw.y); ctx.lineTo(handX, handY); ctx.stroke();
+    // 手先の点
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath(); ctx.arc(handX, handY, 9, 0, Math.PI * 2); ctx.fill();
   }
 }
 
